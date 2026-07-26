@@ -1,0 +1,81 @@
+name: Build Scene Balance Formats
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: false
+        default: 'latest'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Pandoc
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc
+
+    - name: Install LaTeX (for PDF)
+      run: |
+        sudo apt-get install -y \
+          texlive \
+          texlive-xetex \
+          texlive-fonts-recommended \
+          texlive-latex-extra
+
+    - name: Create output directory
+      run: mkdir -p output
+
+    - name: Build PDF
+      run: |
+        pandoc SceneBalanceMaster.md \
+          -o output/SceneBalance.pdf \
+          --pdf-engine=xelatex \
+          -V mainfont="Garamond" \
+          -V sansfont="Source Sans Pro" \
+          -V fontsize=11pt \
+          -V papersize=6x9 \
+          -V geometry:margin=0.75in
+
+    - name: Build EPUB
+      run: |
+        pandoc SceneBalanceMaster.md \
+          -o output/SceneBalance.epub \
+          --toc \
+          --toc-depth=3 \
+          --epub-chapter-level=1 \
+          --metadata title="The Scene Balance Method" \
+          --metadata author="W"
+
+    - name: Copy Markdown source
+      run: cp SceneBalanceMaster.md output/SceneBalance.md
+
+    - name: Generate checksums
+      run: |
+        cd output
+        sha256sum *.pdf *.epub *.md > checksums.txt
+        cat checksums.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: scene-balance-${{ github.event.inputs.version }}
+        path: output/
+        retention-days: 30
+
+    - name: Create Release (optional)
+      if: github.event.inputs.version != 'latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.event.inputs.version }}
+        files: output/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
